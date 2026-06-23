@@ -1,0 +1,101 @@
+---
+title: "Regressão Linear"
+author: "Cristiane Zhu e Júlia Zorzo"
+format: html
+editor: visual
+---
+
+Base de dados escolhida: dados de membros de academias com informações de atributos físicos e indicadores de performance
+
+```{r}
+library(readr)
+dados <- read_csv("gym_members_exercise_tracking.csv")
+View(dados)
+```
+
+
+Pré processamento
+```{r}
+### Mudança dos nomes das colunas
+library(dplyr)
+
+dados_ajustados <- dados %>%
+  rename(
+    Idade = Age,
+    Sexo = Gender,
+    Peso_kg = `Weight (kg)`,
+    Altura_m = `Height (m)`,
+    BPM_max = Max_BPM,
+    BPM_medio = Avg_BPM,
+    BPM_repouso = Resting_BPM,
+    Tempo_treino_h = `Session_Duration (hours)`,
+    Calorias = Calories_Burned,
+    Tipo_treino = Workout_Type,
+    Gordura_percentual = Fat_Percentage,
+    Agua_litros = `Water_Intake (liters)`,
+    Frequencia_semana = `Workout_Frequency (days/week)`,
+    Nivel_experiencia = Experience_Level,
+    IMC = BMI
+  )
+```
+
+Escolha da variável resposta: calorias
+
+Análise da variável
+```{r}
+hist(dados_ajustados$Calorias) # parece ter uma leve assimetria a direita
+```
+
+Analisando a correlação entre as variáveis
+
+```{r}
+correlacao <- cor(dados_ajustados[, sapply(dados, is.numeric)]) 
+data.frame(correlacao) ## Péssimo de analisar por tabela
+
+
+## Grafico de correlação
+library(corrplot)
+corrplot(cor(dados_ajustados[, sapply(dados_ajustados, is.numeric)]),
+         method = "color",
+         type = "upper",
+         addCoef.col = "black",
+         tl.col = "black",
+         tl.cex = 0.9,      # tamanho dos nomes das variáveis
+         number.cex = 0.8,  # tamanho dos números
+         cl.cex = 0.9)      # tamanho da legenda
+```
+
+Pelo gráfico de correlação é possível perceber várias correlações (explicar)
+
+Modelo que ajustamos
+```{r}
+modelo <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
+                Agua_litros + Nivel_experiencia, data = dados_ajustados)
+summary(modelo)
+
+```
+
+Teste de multicolinearidade
+```{r}
+library(car)
+vif(modelo)
+```
+
+
+Análise de diagnóstico
+```{r}
+par(mfrow = c(2,2), family = "serif")
+plot(modelo) #### no primeiro grafico, há umadispersão dos dados conforme aumenta
+```
+
+```{r}
+## Medida corretiva 
+modelo_log <- lm(log(Calorias) ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
+                Agua_litros + Nivel_experiencia, data = dados_ajustados)
+par(mfrow = c(2,2))
+plot(modelo_log) # piorou
+
+library(MASS)
+boxcox(modelo) # ainda n sei p que serve kkkkk
+```
+
