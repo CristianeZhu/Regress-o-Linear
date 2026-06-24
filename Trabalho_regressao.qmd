@@ -18,8 +18,8 @@ Dados de membros de academias com informações de:
 Leitura:
 ```{r}
 library(readr)
-dados <- read_csv("gym_members_exercise_tracking.csv")
-#("C:/Users/DeLL-E6420/Downloads/archive (1)/gym_members_exercise_tracking.csv")
+dados <- read_csv("C:/Users/DeLL-E6420/Downloads/archive (1)/gym_members_exercise_tracking.csv")
+#("gym_members_exercise_tracking.csv")
 View(dados)
 ```
 
@@ -44,7 +44,10 @@ View(dados)
 Observar quais fatores mais influenciam a queima de calorias
 
 ## Objetivos específicos 
-
+Identificar quais variáveis físicas e de desempenho influenciam significativamente a queima de calorias
+Avaliar o ajuste do modelo por meio do R² e significância global
+Verificar os pressupostos do modelo (homocedasticidade, normalidade, multicolinearidade)
+Aplicar medidas corretivas caso os pressupostos sejam violados
 
 # Pré-processamento da base - procedimentos realizados (se necessário)
 ## Renomeação das Colunas
@@ -363,20 +366,20 @@ Todas abaixo de 10, então não há problemas de multicolinearidade
 
 ```{r}
 ### Resíduos ordinários.
-rord <- resid(ajuste) 
+rord <- resid(modelo)
 rord
 
 ### Resíduos padronizados.
-QMRes <- summary(ajuste)$sigma^2 
-rp <- resid(ajuste)/sqrt(QMRes) 
+QMRes <- summary(modelo)$sigma^2 
+rp    <- resid(modelo)/sqrt(QMRes) 
 rp
 
 ### Resíduos studentizados.
-rs <- rstandard(ajuste) 
+rs <- rstandard(modelo) 
 rs
 
 ### Resíduos studentizados externamente.
-rse <- rstudent(ajuste) 
+rse <- rstudent(modelo) 
 rse
 ```
 
@@ -447,7 +450,7 @@ plot(modelo_log) # piorou
 
 library(MASS)
 
-boxcox(modelo) # ainda n sei p que serve kkkkk
+boxcox(modelo) # estima o valor ótimo de λ para transformação da variável resposta. O gráfico indica λ ≈ 0,7, sugerindo a transformação Y^0,7 como alternativa à escala original.
 
 dados_ajustados$calorias_bc <- dados_ajustados$Calorias^0.7 ## após olhar o gráfico box cox, foi escolhido lambda= 0.7 
 
@@ -463,6 +466,63 @@ modelo_bc <- lm(
 par(mfrow = c(2,2))
 plot(modelo_bc) ### deu uma leve melhorada
 ```
+## MQP minimos quadrados ponderados 
+```{r}
+# Estima os pesos pelo inverso da variância dos resíduos
+pesos <- 1 / lm(abs(resid(modelo)) ~ fitted(modelo))$fitted.values^2
+
+modelo_wls <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
+                   Agua_litros + Nivel_experiencia,
+                 data = dados_ajustados,
+                 weights = pesos)
+
+par(mfrow = c(2,2))
+plot(modelo_wls) # ficou quase igual do original
+```
+
+## Boxcox exato
+```{r}
+library(MASS)
+
+bc <- boxcox(modelo, lambda = seq(0, 1, by = 0.1), plotit = TRUE)
+
+# lambda ótimo
+lambda_otimo <- bc$x[which.max(bc$y)]
+lambda_otimo
+```
+com lambda otimo
+```{r}
+dados_ajustados$calorias_bc <- dados_ajustados$Calorias^0.6868687
+
+modelo_bc <- lm(calorias_bc ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
+                  Agua_litros + Nivel_experiencia,
+                data = dados_ajustados)
+
+par(mfrow = c(2,2))
+plot(modelo_bc)
+```
+Residuals vs Fitted — funil praticamente sumiu, dispersão mais homogênea
+Residuals vs Leverage — nenhum ponto ultrapassando a linha de Cook, obs influentes sob controle
+mas...
+Q-Q — caudas pesadas ainda presentes, especialmente na cauda inferior (obs com resíduos muito negativos)
+Scale-Location — linha vermelha ainda tem leve tendência crescente, mas muito mais suave que antes
+--> melhor modelo até entao, ver R2:
+```{r}
+library(kableExtra)
+
+data.frame(
+  Modelo = c("Original", "WLS", "Box-Cox (λ=0.69)"),
+  R2     = round(c(summary(modelo)$r.squared,
+                   summary(modelo_wls)$r.squared,
+                   summary(modelo_bc)$r.squared), 4),
+  R2_adj = round(c(summary(modelo)$adj.r.squared,
+                   summary(modelo_wls)$adj.r.squared,
+                   summary(modelo_bc)$adj.r.squared), 4)
+) %>%
+  knitr::kable(caption = "Comparação de R² entre modelos") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+Mesmo com um R maior, MQP(wls) viola heterocedasticidade, entao o boxcox é melhor.
 
 ## Resíduos padronizados (análise de outlier)
 ```{r}
