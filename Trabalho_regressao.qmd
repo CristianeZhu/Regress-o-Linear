@@ -363,6 +363,28 @@ par(mfrow = c(2,2))
 plot(modelo_bc) ### deu uma leve melhorada
 ```
 
+## Resíduos padronizados (análise de outlier)
+```{r}
+res <-rstandard(modelo_bc)
+which(abs(res) > 2)
+
+
+which(abs(res) > 3) ## nenhum outlier extremo
+
+di <- cooks.distance(modelo_bc)
+
+n <- nrow(dados_ajustados)
+
+which(di > 4/n)
+
+plot(di, type = "h",
+     ylab = "Distância de Cook",
+     xlab = "Observação")
+
+abline(h = 4/nrow(dados_ajustados), lty = 2)
+```
+
+
 # Novo diagnóstico pós correções (se necessário)
 # Resultados 
 (analisar a significância global do modelo, R2, interpretar os efeitos, etc.)
