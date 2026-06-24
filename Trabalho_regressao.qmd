@@ -107,6 +107,7 @@ corrplot(cor(dados_ajustados[, sapply(dados_ajustados, is.numeric)]),
 
 Correlação com círculos proporcionais
 ```{r}
+install.packages("ggcorrplot")
 library(ggcorrplot)
 
 mat_cor <- cor(dados_ajustados[, sapply(dados_ajustados, is.numeric)],
@@ -153,6 +154,7 @@ estatisticas_descritivas1 <- dados_ajustados %>%
 ```
 
 ```{r}
+install.packages("kableExtra")
 library(kableExtra)
 knitr::kable(estatisticas_descritivas1,
              digits = 2,
@@ -297,6 +299,18 @@ modelo <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
 summary(modelo)
 ```
 
+A patir do ajuste do modelo, foi possível verificar que todas as variáveis explicativas tiveram efeito significativo. Além disso, as variaveis  explica aprox 94% do modelo
+
+teve efeito significativo globalmente
+
+Modelo ajustado: 
+Y^=−858.98−2.81(gordura_percentual)+693.65(tempo_treino_h)+6.18(BPM_medio)+38.62(agua_litros)−15.17(nivel_experiencia)
+
+Para tempo de treino, bpm medio e  água há um aumento de ... na variavel resposta p cada uma unidade a mais na variável explicativa (avaliando cada uma mantendo as outras constantes)
+
+Para gordura percentual e nível de experiência a cada aumento de uma unidade a mais na variável explicativa, há uma dimuição nas calorias queimadas
+
+
 ```{r} 
 # trocando bpm por frequencia de treino
 modelo2 <- lm(Calorias ~ Tempo_treino_h + Gordura_percentual +
@@ -314,6 +328,8 @@ library(car)
 vif(modelo) # baixa multicolinearidade
 ```
 
+Todas abaixo de 10, então não há problemas de multicolinearidade
+
 ## Teste de Homocedasticidade
 ```{r}
 par(mfrow = c(2,2), family = "serif")
@@ -329,7 +345,22 @@ par(mfrow = c(2,2))
 plot(modelo_log) # piorou
 
 library(MASS)
+
 boxcox(modelo) # ainda n sei p que serve kkkkk
+
+dados_ajustados$calorias_bc <- dados_ajustados$Calorias^0.7 ## após olhar o gráfico box cox, foi escolhido lambda= 0.7 
+
+modelo_bc <- lm(
+  calorias_bc ~ Gordura_percentual +
+                Tempo_treino_h +
+                BPM_medio +
+                Agua_litros +
+                Nivel_experiencia,
+  data = dados_ajustados
+)
+
+par(mfrow = c(2,2))
+plot(modelo_bc) ### deu uma leve melhorada
 ```
 
 # Novo diagnóstico pós correções (se necessário)
