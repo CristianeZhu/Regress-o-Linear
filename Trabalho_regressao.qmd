@@ -71,6 +71,7 @@ dados_ajustados <- dados %>%
     IMC = BMI
   )
 ```
+
 ## NAs
 ```{r}
 dados_ajustados %>%
@@ -134,6 +135,13 @@ Pelo gráfico de correlação é possível perceber várias correlações (expli
 A variável resposta que vamos modelar, Calorias, tem correlação com Gordura_percentual, Tempo_treino_h,  BPM_medio, Agua_litros e Nivel_experiencia. 
 
 Vamos explorar mais as variáveis
+
+```{r}
+scatterplotMatrix( ~ Calorias+Gordura_percentual + Tempo_treino_h + BPM_medio +
+                Agua_litros + Nivel_experiencia, smooth = FALSE, 
+                   data = dados_ajustados, pch = 20, lwd = 2, cex = 1.5)
+```
+Análise de correlação por gráfico (gráficos à direita da diagonal principal)
 
 ## Medidas de Tendência Central das variáveis numéricas
 ```{r}
@@ -310,6 +318,11 @@ Para tempo de treino, bpm medio e  água há um aumento de ... na variavel respo
 
 Para gordura percentual e nível de experiência a cada aumento de uma unidade a mais na variável explicativa, há uma dimuição nas calorias queimadas
 
+```{r}
+fitted(modelo)
+```
+
+Calorias ajustadas para cada membro avaliado
 
 ```{r} 
 # trocando bpm por frequencia de treino
@@ -322,6 +335,16 @@ summary(modelo2)
 ```
 
 # Realizar diagnóstico do modelo
+
+## Ortogonalidade
+```{r}
+preditores <- dados_ajustados[, c("Tempo_treino_h", "Gordura_percentual", 
+                         "BPM_medio", "Agua_litros", "Nivel_experiencia")]
+cor(preditores)
+# 0 indica ortogonalidade nula
+```
+Correlações altas entre gordura percentual e tempo de treino/agua/nivel exp, nivel de exp e tempo de treino, 
+
 ## Teste de Multicolinearidade
 ```{r}
 library(car)
@@ -330,11 +353,24 @@ vif(modelo) # baixa multicolinearidade
 
 Todas abaixo de 10, então não há problemas de multicolinearidade
 
+
+## Resíduos
+```{r}
+resid(modelo) ### Resíduos produzidos pelo modelo ajustado.
+plot(fitted(modelo), resid(modelo), xlab = 'Valores ajustados', ylab = 'Resíduos', pch = 20)
+### Gráfico de resíduos vs valores ajustados.
+```
+
+O gráfico mostra um formato de funil indicando heterocedasticidade, vai ser necessário aplicar uma medida corretiva
+
 ## Teste de Homocedasticidade
 ```{r}
 par(mfrow = c(2,2), family = "serif")
 plot(modelo) # no primeiro grafico, há uma dispersão dos dados conforme os valores ajustados aumentam -> indica heterocedasticidade
 ```
+
+
+Tendencia de funil, variância aumentando levemente no terceiro gráfico
 
 # Medidas corretivas (se necessário)
 ```{r}
@@ -386,6 +422,23 @@ abline(h = 4/nrow(dados_ajustados), lty = 2)
 
 
 # Novo diagnóstico pós correções (se necessário)
+
+## Intervalos de confiança
+```{r}
+vcov(modelo) 
+### Matriz de variâncias e covariâncias estimada para os estimadores dos betas.
+
+confint(modelo) ### Intervalos de confiança (95%) para os parâmetros do modelo.
+
+## Fazer com o  modelo ajustado depois
+predict(modelo, newdata = data.frame(income = 50,education = 50), interval = 'confidence') 
+### Intervalo de confiança (95%) 
+
+predict(ajuste,newdata=data.frame(income=50,education=50),interval='prediction') 
+### Intervalo de predição (95%)
+
+```
+
 # Resultados 
 (analisar a significância global do modelo, R2, interpretar os efeitos, etc.)
 
