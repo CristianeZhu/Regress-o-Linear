@@ -5,16 +5,49 @@ format: html
 editor: visual
 ---
 
-Base de dados escolhida: dados de membros de academias com informações de atributos físicos e indicadores de performance
+# Motivação da escolha dos dados
+Interesse em comum: analisar dados de treino e resultados/consequências de exercícios físicos por meio do entendimento de comportamentos/variáveis que definem bons resultados finais.
 
+# Descrição da base de dados
+Origem: https://www.kaggle.com/datasets/valakhorasani/gym-members-exercise-dataset
+Dados de membros de academias com informações de:
+- atributos físicos como peso, taxa de gordura e altura;
+- tipo de treino (exemplo: cardio e yoga);
+- indicadores de performance como frequência cardíaca e calorias queimadas, essa última a variável resposta escolhida para o modelo;
+
+Leitura:
 ```{r}
 library(readr)
 dados <- read_csv("gym_members_exercise_tracking.csv")
+#("C:/Users/DeLL-E6420/Downloads/archive (1)/gym_members_exercise_tracking.csv")
 View(dados)
 ```
 
+## Variáveis
+- Idade: Idade do membro da academia.
+- Gênero: Gênero do membro (Masculino ou Feminino).
+- Peso (kg): Peso do membro em quilogramas.
+- Altura (m): Altura do membro em metros.
+- BPM_Máximo: Frequência cardíaca máxima (batimentos por minuto) durante as sessões de treino.
+- BPM_Médio: Frequência cardíaca média durante as sessões de treino.
+- BPM_Repouso: Frequência cardíaca em repouso antes do treino.
+- Duração_Sessão (horas): Duração de cada sessão de treino em horas.
+- Calorias_Queimadas: Total de calorias queimadas durante cada sessão.
+- Tipo_Treino: Tipo de treino realizado (ex: Cardio, Força, Yoga, HIIT).
+- Gordura_Percentual: Percentual de gordura corporal do membro.
+- Água_Ingerida (litros): Consumo diário de água durante os treinos.
+- Frequência_Treino (dias/semana): Número de sessões de treino por semana.
+- Nível_Experiência: Nível de experiência, de iniciante (1) a expert (3).
+- IMC: Índice de Massa Corporal, calculado a partir da altura e do peso.
 
-Pré processamento
+# Objetivos gerais 
+Observar quais fatores mais influenciam a queima de calorias
+
+## Objetivos específicos 
+
+
+# Pré-processamento da base - procedimentos realizados (se necessário)
+## Renomeação das Colunas
 ```{r}
 ### Mudança dos nomes das colunas
 library(dplyr)
@@ -38,22 +71,29 @@ dados_ajustados <- dados %>%
     IMC = BMI
   )
 ```
+## NAs
+```{r}
+dados_ajustados %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "Variavel", values_to = "NAs") %>%
+  knitr::kable(caption = "Valores Ausentes por Variável") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "bordered"),
+                full_width = FALSE)
+```
+Sem variáveis faltantes.
 
-Escolha da variável resposta: calorias
+# Análise descritiva
 
-Análise da variável
+## Histograma da variável resposta
 ```{r}
 hist(dados_ajustados$Calorias) # parece ter uma leve assimetria a direita
 ```
 
-Analisando a correlação entre as variáveis
-
+## Gráfico de correlação 
 ```{r}
-correlacao <- cor(dados_ajustados[, sapply(dados, is.numeric)]) 
-data.frame(correlacao) ## Péssimo de analisar por tabela
+#correlacao <- cor(dados_ajustados[, sapply(dados, is.numeric)]) 
+#data.frame(correlacao) ## Péssimo de analisar por tabela
 
-
-## Grafico de correlação
 library(corrplot)
 corrplot(cor(dados_ajustados[, sapply(dados_ajustados, is.numeric)]),
          method = "color",
@@ -65,29 +105,222 @@ corrplot(cor(dados_ajustados[, sapply(dados_ajustados, is.numeric)]),
          cl.cex = 0.9)      # tamanho da legenda
 ```
 
-Pelo gráfico de correlação é possível perceber várias correlações (explicar)
+Correlação com círculos proporcionais
+```{r}
+library(ggcorrplot)
 
-Modelo que ajustamos
+mat_cor <- cor(dados_ajustados[, sapply(dados_ajustados, is.numeric)],
+               use = "complete.obs")
+
+ggcorrplot(mat_cor,
+           method   = "circle",
+           type     = "upper",
+           lab      = TRUE,
+           lab_size = 2.5,
+           colors   = c("#E63946", "white", "#4E89AE"),
+           title    = "Matriz de Correlação") +
+  theme(
+    plot.title   = element_text(size = 12, hjust = 0.5, face = "bold"),
+    axis.text.x  = element_text(angle = 45, hjust = 1, size = 8),
+    axis.text.y  = element_text(size = 8),
+    legend.title = element_text(size = 9),
+    legend.text  = element_text(size = 8)
+  )
+```
+
+Pelo gráfico de correlação é possível perceber várias correlações (explicar) de diversas variáveis.
+
+A variável resposta que vamos modelar, Calorias, tem correlação com Gordura_percentual, Tempo_treino_h,  BPM_medio, Agua_litros e Nivel_experiencia. 
+
+Vamos explorar mais as variáveis
+
+## Medidas de Tendência Central das variáveis numéricas
+```{r}
+library(tidyr)
+estatisticas_descritivas1 <- dados_ajustados %>% 
+  dplyr::select(where(is.numeric)) %>%
+  reframe(across(everything(), list(
+    Media         = ~mean(.x, na.rm = TRUE),
+    Mediana       = ~median(.x, na.rm = TRUE),
+    Desvio_padrao = ~sd(.x, na.rm = TRUE),
+    Min           = ~min(.x, na.rm = TRUE),
+    Max           = ~max(.x, na.rm = TRUE),
+    Q1            = ~quantile(.x, 0.25, na.rm = TRUE),
+    Q3            = ~quantile(.x, 0.75, na.rm = TRUE)
+  ),
+  .names = "{.col}|{.fn}")) %>% 
+  pivot_longer(everything(), names_to = c("Variavel", ".value"), names_sep = "\\|")
+```
+
+```{r}
+library(kableExtra)
+knitr::kable(estatisticas_descritivas1,
+             digits = 2,
+             caption = "Medidas de Tendência Central e Variabilidade") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "bordered"),
+                full_width = FALSE)
+```
+
+## Boxplots das variáveis
+```{r}
+#| fig-width: 7
+#| fig-height: 10
+
+dados_ajustados %>%
+  dplyr::select(where(is.numeric)) %>%
+  pivot_longer(everything(), names_to = "Variavel", values_to = "Valor") %>%
+  ggplot(aes(x = Variavel, y = Valor, fill = Variavel)) +
+  geom_boxplot(alpha = 0.7, outlier.color = "black", outlier.shape = 16) +
+  facet_wrap(~Variavel, scales = "free", ncol = 2) +
+  labs(title = "Boxplots das Variáveis Numéricas",
+       x = "", y = "") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x     = element_blank())
+```
+Outliers em Calorias, IMC e Peso
+
+## Outliers por explosão dos limites interquartílicos
+```{r}
+# Outliers em Calorias
+out_calorias <- dados_ajustados %>%
+  mutate(obs = row_number()) %>%
+  filter(Calorias > quantile(Calorias, 0.75) + 1.5 * IQR(Calorias) |
+         Calorias < quantile(Calorias, 0.25) - 1.5 * IQR(Calorias)) %>%
+  dplyr::select(obs, Calorias)
+
+# Outliers em IMC
+out_imc <- dados_ajustados %>%
+  mutate(obs = row_number()) %>%
+  filter(IMC > quantile(IMC, 0.75) + 1.5 * IQR(IMC) |
+         IMC < quantile(IMC, 0.25) - 1.5 * IQR(IMC)) %>%
+  dplyr::select(obs, IMC)
+
+# Outliers em Peso
+out_peso <- dados_ajustados %>%
+  mutate(obs = row_number()) %>%
+  filter(Peso_kg > quantile(Peso_kg, 0.75) + 1.5 * IQR(Peso_kg) |
+         Peso_kg < quantile(Peso_kg, 0.25) - 1.5 * IQR(Peso_kg)) %>%
+  dplyr::select(obs, Peso_kg)
+
+knitr::kable(out_calorias, caption = "Outliers — Calorias") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+knitr::kable(out_imc, caption = "Outliers — IMC") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+knitr::kable(out_peso, caption = "Outliers — Peso") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+Da pra conferir na base ou puxar todos os registros pra entender - alguns aparecem na análise de resíduos (quais?)
+Usar algum outro método de detecção de outliers como p99?
+Eles também são pontos influentes? -> pra ver se são retirados ou tratados de outra forma para ajustar o modelo
+                
+## Comportamento e tendência central das variáveis 
+```{r}
+#| fig-width: 10
+#| fig-height: 10
+
+dados_ajustados %>%
+  dplyr::select(where(is.numeric)) %>%
+  pivot_longer(everything(), names_to = "Variavel", values_to = "Valor") %>%
+  ggplot(aes(x = Valor)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#89CFF0",
+                 color = "white", alpha = 0.9, bins = 30) +
+  geom_density(color = "#8B0000", linewidth = 0.9) +
+  facet_wrap(~Variavel, scales = "free", ncol = 2) +
+  labs(x = "", y = "Densidade") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+
+## Tipo de treino
+A variável resposta tem alto desvio padrão, o que faz sentido, ja que uma hipótese é que tipos de treino como yoga queimam poucas calorias em relação a treinos de cardio. Isso facilita a montagem do modelo porque há variabilidade considerável para ser explicada.
+
+```{r}
+dados_ajustados %>%
+  group_by(Tipo_treino) %>%
+  summarise(
+    across(c(Calorias, Gordura_percentual, Tempo_treino_h,
+             BPM_medio, Agua_litros, Nivel_experiencia),
+           ~paste0(round(mean(.x, na.rm = TRUE), 2),
+                   " (", round(sd(.x, na.rm = TRUE), 2), ")"),
+           .names = "{.col}")
+  ) %>%
+  pivot_longer(-Tipo_treino, names_to = "Variavel") %>%
+  pivot_wider(names_from = Tipo_treino, values_from = value) %>%
+  knitr::kable(caption = "Média (Desvio padrão) por Tipo de Treino") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "bordered"),
+                full_width = FALSE)
+```
+Comportamento observado homogêneo, ou seja, não há influência do tipo de treino.
+
+## Sexo
+```{r}
+dados_ajustados %>%
+  group_by(Sexo) %>%
+  summarise(
+    across(c(Calorias, Gordura_percentual, Tempo_treino_h,
+             BPM_medio, Agua_litros, Nivel_experiencia),
+           ~paste0(round(mean(.x, na.rm = TRUE), 2),
+                   " (", round(sd(.x, na.rm = TRUE), 2), ")"),
+           .names = "{.col}")
+  ) %>%
+  pivot_longer(-Sexo, names_to = "Variavel") %>%
+  pivot_wider(names_from = Sexo, values_from = value) %>%
+  knitr::kable(caption = "Média (Desvio padrão) por Sexo") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "bordered"),
+                full_width = FALSE)
+```
+Homens perdem mais calorias, têm menos percentual de gordura, treinar ligeiramente menos, mas têm maior BPM e consomem mais água.
+
+## Idade - isolada
+```{r}
+ggplot(dados_ajustados, aes(x = Idade)) +
+  geom_histogram(binwidth = 5, fill = "#4E89AE", color = "white", alpha = 0.8) +
+  labs(title = "Distribuição da Idade",
+       x = "Idade", y = "Frequência") +
+  theme_minimal()
+```
+Praticamente uniforme
+
+Gráfico de dispersão?
+
+## Conclusões sobre a base
+Base sem problemas estruturais e com grande homogeneidade dentro das variáveis. Hipóteses como comportamentos distintos de acordo com Sexo e Idade, por exemplo, não se confirmam.
+
+# Ajuste do modelo de regressão linear
 ```{r}
 modelo <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
                 Agua_litros + Nivel_experiencia, data = dados_ajustados)
 summary(modelo)
-
 ```
 
-Teste de multicolinearidade
+```{r} 
+# trocando bpm por frequencia de treino
+modelo2 <- lm(Calorias ~ Tempo_treino_h + Gordura_percentual +
+               Frequencia_semana # n signific
+              + Nivel_experiencia #n signific
+              + Agua_litros,
+             data = dados_ajustados)
+summary(modelo2)
+```
+
+# Realizar diagnóstico do modelo
+## Teste de Multicolinearidade
 ```{r}
 library(car)
-vif(modelo)
+vif(modelo) # baixa multicolinearidade
 ```
 
-
-Análise de diagnóstico
+## Teste de Homocedasticidade
 ```{r}
 par(mfrow = c(2,2), family = "serif")
-plot(modelo) #### no primeiro grafico, há umadispersão dos dados conforme aumenta
+plot(modelo) # no primeiro grafico, há uma dispersão dos dados conforme os valores ajustados aumentam -> indica heterocedasticidade
 ```
 
+# Medidas corretivas (se necessário)
 ```{r}
 ## Medida corretiva 
 modelo_log <- lm(log(Calorias) ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
@@ -98,4 +331,12 @@ plot(modelo_log) # piorou
 library(MASS)
 boxcox(modelo) # ainda n sei p que serve kkkkk
 ```
+
+# Novo diagnóstico pós correções (se necessário)
+# Resultados 
+(analisar a significância global do modelo, R2, interpretar os efeitos, etc.)
+
+
+
+
 
