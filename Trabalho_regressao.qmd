@@ -301,6 +301,8 @@ Gráfico de dispersão?
 Base sem problemas estruturais e com grande homogeneidade dentro das variáveis. Hipóteses como comportamentos distintos de acordo com Sexo e Idade, por exemplo, não se confirmam.
 
 # Ajuste do modelo de regressão linear
+Variável resposta: Calorias
+Variáveis explicativas: Gordura percentual, tempo de treino, BPM medio, água e nível de experiencia
 ```{r}
 modelo <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
                 Agua_litros + Nivel_experiencia, data = dados_ajustados)
@@ -312,6 +314,7 @@ A patir do ajuste do modelo, foi possível verificar que todas as variáveis exp
 teve efeito significativo globalmente
 
 Modelo ajustado: 
+
 Y^=−858.98−2.81(gordura_percentual)+693.65(tempo_treino_h)+6.18(BPM_medio)+38.62(agua_litros)−15.17(nivel_experiencia)
 
 Para tempo de treino, bpm medio e  água há um aumento de ... na variavel resposta p cada uma unidade a mais na variável explicativa (avaliando cada uma mantendo as outras constantes)
@@ -319,11 +322,12 @@ Para tempo de treino, bpm medio e  água há um aumento de ... na variavel respo
 Para gordura percentual e nível de experiência a cada aumento de uma unidade a mais na variável explicativa, há uma dimuição nas calorias queimadas
 
 ```{r}
-fitted(modelo)
+ajuste <- fitted(modelo)
 ```
 
-Calorias ajustadas para cada membro avaliado
+Calorias ajustadas para cada membro avaliado. Serve para fazer o gráfico de resíduos
 
+### Teste
 ```{r} 
 # trocando bpm por frequencia de treino
 modelo2 <- lm(Calorias ~ Tempo_treino_h + Gordura_percentual +
@@ -343,7 +347,8 @@ preditores <- dados_ajustados[, c("Tempo_treino_h", "Gordura_percentual",
 cor(preditores)
 # 0 indica ortogonalidade nula
 ```
-Correlações altas entre gordura percentual e tempo de treino/agua/nivel exp, nivel de exp e tempo de treino, 
+Correlações altas entre gordura percentual e tempo de treino/agua/nivel exp, nivel de exp e tempo de treino. 
+No geral, há altas correlações, mas para verificar a multicolinearidade foi feito o teste de fator de inflação de variância
 
 ## Teste de Multicolinearidade
 ```{r}
@@ -355,13 +360,73 @@ Todas abaixo de 10, então não há problemas de multicolinearidade
 
 
 ## Resíduos
+
 ```{r}
-resid(modelo) ### Resíduos produzidos pelo modelo ajustado.
+### Resíduos ordinários.
+rord <- resid(ajuste) 
+rord
+
+### Resíduos padronizados.
+QMRes <- summary(ajuste)$sigma^2 
+rp <- resid(ajuste)/sqrt(QMRes) 
+rp
+
+### Resíduos studentizados.
+rs <- rstandard(ajuste) 
+rs
+
+### Resíduos studentizados externamente.
+rse <- rstudent(ajuste) 
+rse
+```
+
+### Resíduos ordinários
+
+Os resíduos ordinários servem para uma verificação geral do modelo
+
+```{r}
+rord <-resid(modelo) ### Resíduos produzidos pelo modelo ajustado.
 plot(fitted(modelo), resid(modelo), xlab = 'Valores ajustados', ylab = 'Resíduos', pch = 20)
 ### Gráfico de resíduos vs valores ajustados.
 ```
 
 O gráfico mostra um formato de funil indicando heterocedasticidade, vai ser necessário aplicar uma medida corretiva
+
+### Resíduos padronizados
+
+```{r}
+QMRes <- summary(modelo)$sigma^2 
+rp <- resid(modelo)/sqrt(QMRes) 
+rp
+```
+
+
+### Resíduos studentizados
+
+Server para verificar outliers de forma mais precisa
+
+```{r}
+rs <- rstandard(modelo) 
+rs
+```
+
+### Resíduos studentizados externamente
+
+```{r}
+rse <- rstudent(modelo) 
+rse
+```
+
+```{r}
+pairs(data.frame(rord, rp, rs, rse), cex = 2, pch = 20)
+cor(data.frame(rord, rp, rs, rse))
+
+```
+Todos os pares formam uma linha reta perfeita — isso indica que os 4 tipos de resíduos são linearmente proporcionais entre si neste modelo.
+
+não há outliers tão influentes a ponto de fazer os resíduos studentizados externos divergirem dos demais.
+
+O modelo é estável
 
 ## Teste de Homocedasticidade
 ```{r}
