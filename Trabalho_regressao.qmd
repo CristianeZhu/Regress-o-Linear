@@ -484,8 +484,11 @@ Não são outliers, apenas são os maiores da amostra
 ```{r}
 cook <- cooks.distance(modelo)
 plot(cook, type = "h")
-abline(h = 4/nrow(dados_ajustados), col = "red", lty = 2)
+
+cook > 1 ## nada
 ```
+
+Nenhum maior que 1
 
 ### Ponto de alavanca
 ```{r}
@@ -497,7 +500,7 @@ which(h > limite_h)
 
 ```{r}
 dff <- dffits(modelo)
-limite_dff <- 2*sqrt(6/nrow(dados_ajustados))
+limite_dff <- 2/sqrt(6/nrow(dados_ajustados))
 which(abs(dff) > limite_dff)
 # muitas obs influentes pelo critério DFFITS, mas isso é esperado com n grande
 # combinar com Cook para decisão final
@@ -532,9 +535,8 @@ DW próximo de 2 indica ausência de autocorrelação
 p-valor = 0.2392 -> não rejeita H0 -> resíduos independentes
 
 
-
-
 # Medidas corretivas 
+## Tranformação de variáveis
 ```{r}
 ## Medida corretiva 
 modelo_log <- lm(log(Calorias) ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
@@ -575,6 +577,42 @@ modelo_wls <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
 par(mfrow = c(2,2))
 plot(modelo_wls) # ficou quase igual do original
 ```
+## Estimadores M
+```{r}
+modelo_M <- rlm(
+  Calorias ~ Gordura_percentual +
+    Tempo_treino_h +
+    BPM_medio +
+    Agua_litros +
+    Nivel_experiencia,
+  data = dados_ajustados,
+  psi = psi.huber
+)
+
+par(mfrow = c(2,2))
+plot(modelo_M)
+```
+Melhorou quase nada
+
+## regressão robusta 
+```{r}
+install.packages("robustbase")   # apenas uma vez
+library(robustbase)
+modelo_lts <- ltsReg(
+  Calorias ~ Gordura_percentual +
+    Tempo_treino_h +
+    BPM_medio +
+    Agua_litros +
+    Nivel_experiencia,
+  data = dados_ajustados
+)
+
+par(mfrow = c(2,2))
+plot(modelo_lts)
+```
+
+Horrível
+
 
 ## Boxcox exato
 ```{r}
@@ -658,6 +696,8 @@ shapiro.test(rstudent(modelo_bc))
 
 ## Independência
 ```{r}
+install.packages("dwtest")
+require(dwtest)
 dwtest(modelo_bc)
 ```
 
@@ -687,7 +727,7 @@ which(h_bc > limite_h)
 ## DFFITS
 ```{r}
 dff_bc <- dffits(modelo_bc)
-limite_dff <- 2*sqrt(6/nrow(dados_ajustados))
+limite_dff <- 2/sqrt(6/nrow(dados_ajustados))
 which(abs(dff_bc) > limite_dff)
 ```
 
