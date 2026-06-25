@@ -307,10 +307,15 @@ modelo <- lm(Calorias ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
 summary(modelo)
 ```
 
-A patir do ajuste do modelo, foi possível verificar que todas as variáveis explicativas tiveram efeito significativo. Além disso, as variaveis  explica aprox 94% do modelo
+A patir do modelo inicial, foi possível verificar que todas as variáveis explicativas tiveram efeito significativo. Além disso, as variaveis  explica aprox 94% do modelo
 
 teve efeito significativo globalmente
 
+
+```{r}
+ajuste <- fitted(modelo)
+ajuste
+```
 Modelo ajustado: 
 
 Y^=−858.98−2.81(gordura_percentual)+693.65(tempo_treino_h)+6.18(BPM_medio)+38.62(agua_litros)−15.17(nivel_experiencia)
@@ -319,22 +324,8 @@ Para tempo de treino, bpm medio e  água há um aumento de ... na variavel respo
 
 Para gordura percentual e nível de experiência a cada aumento de uma unidade a mais na variável explicativa, há uma dimuição nas calorias queimadas
 
-```{r}
-ajuste <- fitted(modelo)
-```
-
 Calorias ajustadas para cada membro avaliado. Serve para fazer o gráfico de resíduos
 
-### Teste
-```{r} 
-# trocando bpm por frequencia de treino
-modelo2 <- lm(Calorias ~ Tempo_treino_h + Gordura_percentual +
-               Frequencia_semana # n signific
-              + Nivel_experiencia #n signific
-              + Agua_litros,
-             data = dados_ajustados)
-summary(modelo2)
-```
 
 # Realizar diagnóstico do modelo
 
@@ -395,7 +386,6 @@ não há outliers tão influentes a ponto de fazer os resíduos studentizados ex
 
 O modelo é estável
 
-### Análise de resíduos (testes de homocedasticidade e normalidade)
 
 #### Gráfico de resíduos versus valores ajustados
 
@@ -403,13 +393,13 @@ O modelo é estável
 ### Gráfico de resíduos versus valores ajustados
 fit <- fitted(modelo)
 par(cex = 1.4, las = 1)
-plot(fit, res, xlab = 'Valores ajustados', ylab = 'Resíduos studentizados', pch = 20)
+plot(fit, rse, xlab = 'Valores ajustados', ylab = 'Resíduos studentizados', pch = 20)
 ### Fica evidente que os resíduos não apresentam variância constante pelo padrão funil
 ```
 
 O gráfico mostra um formato de funil indicando heterocedasticidade, vai ser necessário aplicar uma medida corretiva
 
-#### Teste de significância para variância constante
+### Homocedasticidade
 
 ```{r}
 ncvTest(modelo)
@@ -418,15 +408,14 @@ ncvTest(modelo)
 ```
 Pelo p-valor = 2.22e^-16 rejeitamos Ho, logo há evidências de que a variância não é constante
 
-#### Teste de significância para normalidade dos resíduos
-
+### Normalidade
 ```{r}
 shapiro.test(rse)
 ### Teste da hipótese nula de normalidade para os resíduos
 ```
 Pelo p-valor = 0.0165 não rejeitamos H0, então não há evidências de que os resíduos não são normais
 
-## Gráficos de diagnóstico
+### Gráficos de diagnóstico
 ```{r}
 par(mfrow = c(2,2), family = "serif")
 plot(modelo) # no primeiro grafico, há uma dispersão dos dados conforme os valores ajustados aumentam -> indica heterocedasticidade
@@ -473,10 +462,7 @@ modelo_v2 <- update(modelo, subset = c(-713, -911))
 ### modelos.
 
 modelo_v2
-
-install.packages("Rmisc")
 compareCoefs(modelo, modelo_v2)
-multiplot(modelo, modelo_v2)
 ```
 
 Tirar as observações praticamente não fez diferença no modelo, logo não eram pontos influentes, apenas outliers
@@ -507,12 +493,14 @@ h <- hatvalues(modelo)
 limite_h <- 2*(5+1)/nrow(dados_ajustados)
 which(h > limite_h)
 ```
-### df
+### DFFITS
 
 ```{r}
 dff <- dffits(modelo)
 limite_dff <- 2*sqrt(6/nrow(dados_ajustados))
 which(abs(dff) > limite_dff)
+# muitas obs influentes pelo critério DFFITS, mas isso é esperado com n grande
+# combinar com Cook para decisão final
 ```
 
 ## Ortogonalidade
@@ -534,9 +522,19 @@ vif(modelo) # baixa multicolinearidade
 
 Todas abaixo de 10, então não há problemas de multicolinearidade
 
+## Independencia
+```{r}
+install.packages("lmtest")
+library(lmtest)
+dwtest(modelo)
+```
+DW próximo de 2 indica ausência de autocorrelação
+p-valor = 0.2392 -> não rejeita H0 -> resíduos independentes
 
 
-# Medidas corretivas (se necessário)
+
+
+# Medidas corretivas 
 ```{r}
 ## Medida corretiva 
 modelo_log <- lm(log(Calorias) ~ Gordura_percentual + Tempo_treino_h + BPM_medio +
@@ -589,6 +587,7 @@ lambda_otimo <- bc$x[which.max(bc$y)]
 lambda_otimo
 ```
 com lambda otimo
+
 ```{r}
 dados_ajustados$calorias_bc <- dados_ajustados$Calorias^0.6868687
 
@@ -641,29 +640,91 @@ plot(di, type = "h",
      xlab = "Observação")
 
 abline(h = 4/nrow(dados_ajustados), lty = 2)
+
 ```
 
 
-# Novo diagnóstico pós correções (se necessário)
+# Novo diagnóstico pós correções
+
+## Homocedasticidade
+```{r}
+ncvTest(modelo_bc)
+``` 
+
+## Normalidade
+```{r}
+shapiro.test(rstudent(modelo_bc))
+```
+
+## Independência
+```{r}
+dwtest(modelo_bc)
+```
+
+
+## Outliers
+```{r}
+res_bc <- rstandard(modelo_bc)
+which(abs(res_bc) > 3)
+```
+
+## Distância de Cook
+```{r}
+cook_bc <- cooks.distance(modelo_bc)
+plot(cook_bc, type = "h")
+abline(h = 4/nrow(dados_ajustados), lty = 2, col = "red")
+```
+
+
+## Ponto de alavanca
+```{r}
+h_bc <- hatvalues(modelo_bc)
+limite_h <- 2*(5+1)/nrow(dados_ajustados)
+which(h_bc > limite_h)
+```
+
+
+## DFFITS
+```{r}
+dff_bc <- dffits(modelo_bc)
+limite_dff <- 2*sqrt(6/nrow(dados_ajustados))
+which(abs(dff_bc) > limite_dff)
+```
+
+## VIF
+```{r}
+vif(modelo_bc)
+```
 
 ## Intervalos de confiança
 ```{r}
-vcov(modelo) 
-### Matriz de variâncias e covariâncias estimada para os estimadores dos betas.
+confint(modelo_bc)
 
-confint(modelo) ### Intervalos de confiança (95%) para os parâmetros do modelo.
-
-## Fazer com o  modelo ajustado depois
-predict(modelo, newdata = data.frame(income = 50,education = 50), interval = 'confidence') 
-### Intervalo de confiança (95%) 
-
-predict(ajuste,newdata=data.frame(income=50,education=50),interval='prediction') 
-### Intervalo de predição (95%)
-
+predict(modelo_bc,
+        newdata = data.frame(
+          Gordura_percentual = 25,
+          Tempo_treino_h     = 1.5,
+          BPM_medio          = 140,
+          Agua_litros        = 2.5,
+          Nivel_experiencia  = 2
+        ),
+        interval = "prediction")
 ```
+convertendo pra escala certa:
+
+```{r}
+# reverter a transformação
+118.0587^(1/0.6868687)  # ponto estimado
+107.8925^(1/0.6868687)  # limite inferior
+128.2249^(1/0.6868687)  # limite superior
+```
+vamos usar intervalo??
 
 # Resultados 
-(analisar a significância global do modelo, R2, interpretar os efeitos, etc.)
+```{r}
+summary(modelo_bc)
+```
+94% explicado
 
 
 
