@@ -139,11 +139,6 @@ A variável resposta que vamos modelar, Calorias, tem correlação com Gordura_p
 
 Vamos explorar mais as variáveis
 
-```{r}
-scatterplotMatrix( ~ Calorias+Gordura_percentual + Tempo_treino_h + BPM_medio +
-                Agua_litros + Nivel_experiencia, smooth = FALSE, 
-                   data = dados_ajustados, pch = 20, lwd = 2, cex = 1.5)
-```
 Análise de correlação por gráfico (gráficos à direita da diagonal principal)
 
 ## Medidas de Tendência Central das variáveis numéricas
@@ -343,45 +338,19 @@ summary(modelo2)
 
 # Realizar diagnóstico do modelo
 
-## Ortogonalidade
+## Linearidade
 ```{r}
-preditores <- dados_ajustados[, c("Tempo_treino_h", "Gordura_percentual", 
-                         "BPM_medio", "Agua_litros", "Nivel_experiencia")]
-cor(preditores)
-# 0 indica ortogonalidade nula
+scatterplotMatrix( ~ Calorias+Gordura_percentual + Tempo_treino_h + BPM_medio +
+                Agua_litros + Nivel_experiencia, smooth = FALSE, 
+                   data = dados_ajustados, pch = 20, lwd = 2, cex = 1.5)
+
+plot(dados_ajustados$Tempo_treino_h, dados_ajustados$Calorias)
+plot(dados_ajustados$BPM_medio, dados_ajustados$Calorias)
+plot(dados_ajustados$Gordura_percentual, dados_ajustados$Calorias)
+plot(dados_ajustados$Agua_litros, dados_ajustados$Calorias)
 ```
-Correlações altas entre gordura percentual e tempo de treino/agua/nivel exp, nivel de exp e tempo de treino. 
-No geral, há altas correlações, mas para verificar a multicolinearidade foi feito o teste de fator de inflação de variância
-
-## Teste de Multicolinearidade
-```{r}
-library(car)
-vif(modelo) # baixa multicolinearidade
-```
-
-Todas abaixo de 10, então não há problemas de multicolinearidade
-
 
 ## Resíduos
-
-```{r}
-### Resíduos ordinários.
-rord <- resid(modelo)
-rord
-
-### Resíduos padronizados.
-QMRes <- summary(modelo)$sigma^2 
-rp    <- resid(modelo)/sqrt(QMRes) 
-rp
-
-### Resíduos studentizados.
-rs <- rstandard(modelo) 
-rs
-
-### Resíduos studentizados externamente.
-rse <- rstudent(modelo) 
-rse
-```
 
 ### Resíduos ordinários
 
@@ -389,11 +358,7 @@ Os resíduos ordinários servem para uma verificação geral do modelo
 
 ```{r}
 rord <-resid(modelo) ### Resíduos produzidos pelo modelo ajustado.
-plot(fitted(modelo), resid(modelo), xlab = 'Valores ajustados', ylab = 'Resíduos', pch = 20)
-### Gráfico de resíduos vs valores ajustados.
 ```
-
-O gráfico mostra um formato de funil indicando heterocedasticidade, vai ser necessário aplicar uma medida corretiva
 
 ### Resíduos padronizados
 
@@ -402,7 +367,6 @@ QMRes <- summary(modelo)$sigma^2
 rp <- resid(modelo)/sqrt(QMRes) 
 rp
 ```
-
 
 ### Resíduos studentizados
 
@@ -431,14 +395,146 @@ não há outliers tão influentes a ponto de fazer os resíduos studentizados ex
 
 O modelo é estável
 
-## Teste de Homocedasticidade
+### Análise de resíduos (testes de homocedasticidade e normalidade)
+
+#### Gráfico de resíduos versus valores ajustados
+
+```{r}
+### Gráfico de resíduos versus valores ajustados
+fit <- fitted(modelo)
+par(cex = 1.4, las = 1)
+plot(fit, res, xlab = 'Valores ajustados', ylab = 'Resíduos studentizados', pch = 20)
+### Fica evidente que os resíduos não apresentam variância constante pelo padrão funil
+```
+
+O gráfico mostra um formato de funil indicando heterocedasticidade, vai ser necessário aplicar uma medida corretiva
+
+#### Teste de significância para variância constante
+
+```{r}
+ncvTest(modelo)
+### Teste da hipótese nula de variância constante para os resíduos.
+### Temos evidência altamente significativa de variância não constante.
+```
+Pelo p-valor = 2.22e^-16 rejeitamos Ho, logo há evidências de que a variância não é constante
+
+#### Teste de significância para normalidade dos resíduos
+
+```{r}
+shapiro.test(rse)
+### Teste da hipótese nula de normalidade para os resíduos
+```
+Pelo p-valor = 0.0165 não rejeitamos H0, então não há evidências de que os resíduos não são normais
+
+## Gráficos de diagnóstico
 ```{r}
 par(mfrow = c(2,2), family = "serif")
 plot(modelo) # no primeiro grafico, há uma dispersão dos dados conforme os valores ajustados aumentam -> indica heterocedasticidade
 ```
+Primeiro gráfico: Tendencia de funil, variancia não constante, o modelo aparenta ser linear pela linha quase reta
+
+Segundo gráfico: segue a linha, resíduos seguem uma normal
+
+Terceiro gráfico: Tendencia de funil, variância aumentando levemente
+
+## Análise de outlier
+
+Pelos gráficos, foi possível notar 3 pontos com resíduos extremos, 429, 713 e 911
+
+```{r}
+dados_ajustados[c(429,713,911),]
+
+rse[c(429, 713, 911)]
+
+data.frame(
+  obs = c(429,713,911),
+  observado = modelo$model$Calorias[c(429,713,911)],
+  previsto = fitted(modelo)[c(429,713,911)],
+  residuo = residuals(modelo)[c(429,713,911)]
+)
+```
+
+Aparentemente, eles possuem resíduo muito alto
+
+### Teste de verificação de outliers
+
+```{r}
+res <-rstandard(modelo)
+
+# Valores escalonados com valor absoliuta maior que 3 são possíveis outliers
+which(abs(res) > 3) ## outlier apenas as obs 713 e 911
+```
+
+Para verificar, vamos tirar eles do modelo e analisar se vai fazer muita diferença
+
+```{r}
+modelo_v2 <- update(modelo, subset = c(-713, -911))
+### Agora vamos comparar estimativas e erros padrões produzidas pelos dois
+### modelos.
+
+modelo_v2
+
+install.packages("Rmisc")
+compareCoefs(modelo, modelo_v2)
+multiplot(modelo, modelo_v2)
+```
+
+Tirar as observações praticamente não fez diferença no modelo, logo não eram pontos influentes, apenas outliers
+
+Gráficos após remover os dois pontos
+```{r}
+plot(modelo_v2, which = 1:4)
+qqPlot(modelo)
+```
+Agora, de novo temos os dois pontos como pontos atípicos, vamos verificar se são outliers
+
+```{r}
+res2 <- rstudent(modelo_v2)
+which(abs(res2) > 3) ## nada
+```
+Não são outliers, apenas são os maiores da amostra
+
+### Distância de cook
+```{r}
+cook <- cooks.distance(modelo)
+plot(cook, type = "h")
+abline(h = 4/nrow(dados_ajustados), col = "red", lty = 2)
+```
+
+### Ponto de alavanca
+```{r}
+h <- hatvalues(modelo)
+limite_h <- 2*(5+1)/nrow(dados_ajustados)
+which(h > limite_h)
+```
+### df
+
+```{r}
+dff <- dffits(modelo)
+limite_dff <- 2*sqrt(6/nrow(dados_ajustados))
+which(abs(dff) > limite_dff)
+```
+
+## Ortogonalidade
+```{r}
+preditores <- dados_ajustados[, c("Tempo_treino_h", "Gordura_percentual", 
+                         "BPM_medio", "Agua_litros", "Nivel_experiencia")]
+cor(preditores)
+# 0 indica ortogonalidade nula
+```
+
+Correlações altas entre gordura percentual e tempo de treino/agua/nivel exp, nivel de exp e tempo de treino. 
+No geral, há altas correlações, mas para verificar a multicolinearidade foi feito o teste de fator de inflação de variância
+
+## Teste de Multicolinearidade
+```{r}
+library(car)
+vif(modelo) # baixa multicolinearidade
+```
+
+Todas abaixo de 10, então não há problemas de multicolinearidade
 
 
-Tendencia de funil, variância aumentando levemente no terceiro gráfico
 
 # Medidas corretivas (se necessário)
 ```{r}
@@ -452,7 +548,7 @@ library(MASS)
 
 boxcox(modelo) # estima o valor ótimo de λ para transformação da variável resposta. O gráfico indica λ ≈ 0,7, sugerindo a transformação Y^0,7 como alternativa à escala original.
 
-dados_ajustados$calorias_bc <- dados_ajustados$Calorias^0.7 ## após olhar o gráfico box cox, foi escolhido lambda= 0.7 
+dados_ajustados$calorias_bc <- dados_ajustados$Calorias^0.7 ## após olhar o gráfico box cox, foi escolhido lambda = 0.7 
 
 modelo_bc <- lm(
   calorias_bc ~ Gordura_percentual +
@@ -466,7 +562,9 @@ modelo_bc <- lm(
 par(mfrow = c(2,2))
 plot(modelo_bc) ### deu uma leve melhorada
 ```
+
 ## MQP minimos quadrados ponderados 
+
 ```{r}
 # Estima os pesos pelo inverso da variância dos resíduos
 pesos <- 1 / lm(abs(resid(modelo)) ~ fitted(modelo))$fitted.values^2
